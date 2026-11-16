@@ -1,0 +1,88 @@
+#!/system/bin/sh
+# VCut Lower xaga 配置
+# 位置: /data/adb/vcut_lower/config.sh
+# 改完重启生效；或直接写 /sys/module/vcut_lower/parameters/* 立即生效。
+
+# ============ 关机电压（mV）============
+# xaga 没有 MCA 的 DF/Term Voltage 路径，VCUT_FW 只作为 UI 兼容值保存；
+# 真正生效的是 VCUT_DELAY（软件 CAPACITY 下限）。
+VCUT_FW=3000
+VCUT_DELAY=3000
+VCUT_SW=2900
+
+# ============ PowerSave 30 秒关机护栏 ============
+# 内核不再伪造 SOC：电量计报多少就是多少（3% 钳制已证明无用，2026-11-05 移除）。
+# 30 秒关机的拦截完全由框架侧 hook 负责，见 ph.v.g0。
+# hook 是 system_app，读不到 sysfs / /data/adb；VCUT_DELAY 与下面两项由
+# service.sh 发布到 Settings.Global（vcut_delay_mv / vcut_pc_guard），
+# App 拖关机电压滑块时也会同步发布，下一次广播即生效。
+# PC_GUARD: 1 = 30 秒关机只在电压 <= VCUT_DELAY 时触发（跟随滑块）
+#           0 = 完全屏蔽 30 秒关机，关机改由内核按 VCUT_DELAY 执行
+PC_GUARD=1
+
+# 兼容 vcut UI；xaga 无 3000mV vpack 硬编码闸，本项无实际作用
+KILL_VPACK_GATE=1
+
+# ============ 电量显示 ============
+# 1=按 bq28z610 的 rm/fcc 显示真实电量
+SOC_CTL=1
+# coul_ctl=1 -> 内核接管 CAPACITY，上报真实库仑积分 SOC
+# 实测：满放 6024mAh，与 true_mah=6000 相差 0.4%
+#       芯片线性模型只认 3931mAh，低估 1.53 倍
+# 0 = 关闭接管，退回芯片口径
+COUL_CTL=1
+# 真实容量(mAh)；标称 6200，实测 6024，取 6000
+TRUE_MAH=6000
+
+# 0=实时读取电量计满充容量；>0 强制覆盖（mAh）
+FCC_MAH=0
+
+# 底部补偿容量（mAh）。0=不补偿；默认 0，避免底部重复计算
+QBOT_MAH=0
+RINT_MOHM=28
+
+# ============ 伪装循环次数 / 抬高充电电压上限 ============
+# FAKE_CYCLE       = 第一个开关“伪装循环次数”：>=0 写 bms/cycle_count。
+# FAKE_FG_CYCLE    = 第二个开关“抬高充电电压上限”：
+#                    1 -> fv_target_mv=FV_TARGET_MV；-1 -> 0（原厂 4445/4475）。
+# FV_TARGET_MV     = 抬高开关的目标电压（App 滑块可调，范围 4445~4580）。
+#
+# ★ 这两个值只是“开机时加载用”的快照，改这里不会实时生效。
+#   内核模块的 fv_target_mv 是内核内存里的普通变量，不读本文件；
+#   只有有人往 /sys/module/vcut_lower/parameters/fv_target_mv 写值才会变。
+#   所以手工改完本文件后，必须走下面任一方式让它生效：
+#     a) 打开控制 App → 电池解容 → 拨一下“抬高充电电压上限”，或拖一下
+#        “充电电压上限”滑块（App 会先写内核参数，再回写本文件）；
+#     b) 或重启手机（service.sh 开机按本文件的 FV_TARGET_MV 传给 insmod）。
+#   注意：0 表示“关闭/跟随原厂”，不是目标电压，不要手填 0 当默认值。
+FAKE_CYCLE=-1
+FAKE_FG_CYCLE=1
+FV_TARGET_MV=4475
+
+# ============ 充电增强 ============
+# A: 写 usb/thermal_remove，摘除有线热限流
+ENABLE_THERMAL_REMOVE=0
+# B: ko 内强制 charger current；护栏由 vcut_turbo.sh 负责
+ENABLE_FORCE=0
+FORCE_MA=18000
+
+# 充电阶梯：按带载电压分档，同一次充电只降不升
+# LADDER_V 为拐点 mV，LADDER_MA 比拐点多一个
+LADDER_V=4080,4120,4250
+LADDER_MA=18000,18000,15930,12360
+
+# 护栏（任一项超限立即撤回，带回差）
+MAX_SOC=80
+MAX_VBAT=4460
+MAX_BTEMP=420
+MAX_CTHERM=70000
+MAX_CONN=45000
+HYST_SOC=3
+HYST_VBAT=80
+HYST_BTEMP=30
+HYST_CTHERM=4000
+HYST_CONN=3000
+
+# ============ 日志 ============
+# 0=安静 1=关键调整 2=详细（仅调试）
+VERBOSE=1

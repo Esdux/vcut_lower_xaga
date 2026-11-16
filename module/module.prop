@@ -1,0 +1,6 @@
+id=vcut_lower
+name=VCut Lower (xaga)
+version=v3.2-xaga
+versionCode=20102
+author=xaga-vcut
+description=xaga/MT6895 专用 VCut Lower 后端：保留 VCut v1.9 APK 的参数 ABI，内核改用 pmic-votable + bq28z610 实现。支持关机电压、真实电量、伪装循环、充电电压上限、亮屏快充、强制电流阶梯与护栏、充电记录。v2.8: 首个正式版，滑块松手写值不再整页刷新。v2.9: 修复 PowerSave 护栏 hook——旧版读 sysfs 被 SELinux 拒绝导致全程失效；阈值改由 Settings.Global 发布（root 写 / system_app 读），30 秒关机严格跟随用户设定的关机电压；同时移除内核 SOC=0 钳到 3% 的无效兜底。仅支持 xaga 5.10。 v3.0: 抬高充电电压上限加两级安全确认（满18岁知情确认 + 30秒强制警告，确认一次后不再打扰）；移除 fv_watch 守护（App 已直接写内核参数，守护每秒轮询会抢写并硬编码 4530 覆盖用户设定）；默认满充电压改为 4475，越界不再拉满到 4580；修开启开关时 FV_TARGET_MV 不回写配置的问题。 | v3.1: 内核库仑积分接管 SOC（true_mah=6000）+ 关机电压下降沿。 | v3.2: 新增功能页「临时取消 30 秒关机」——内核 shut_skip 闩锁 + 框架侧 vcut_shut_skip 到期时间戳（30 分钟窗口），只撤掉当前这一轮倒计时，电压回到闸以上或插上充电器即自动恢复，其余判定全部交回系统；电压回闸上时 shut_state 自动清零避免旧状态滞留。同时按 hook 规范修 MiuiBatteryServiceImpl 定位：Class.forName 不再初始化类、PowerSave 类名改候选表、注入段按类型取字段而不再按 this$0/mContext 名字查、getSystemContext 改用 currentActivityThread 而不再调 systemMain()。

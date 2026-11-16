@@ -1,0 +1,11 @@
+id=com.github.zyl6932.vcutlower
+name=VCut Lower PowerSave Guard
+version=1.0
+versionCode=1
+author=xaga-vcut
+description=让 PowerSaveService 的 30 秒关机跟随关机电压滑块，并拦截粘性广播重放误触发
+minApiVersion=102
+targetApiVersion=102
+staticScope=false
+exceptionMode=protective
+autoHotReload=true

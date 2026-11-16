@@ -1,0 +1,38 @@
+# 构建产物
+build/
+.gradle/
+.kotlin/
+*.apk
+*.aab
+*.class
+*.dex
+
+# 内核模块编译中间产物
+*.o
+*.ko
+*.mod
+*.mod.c
+*.symvers
+*.order
+__pycache__/
+*.pyc
+
+# 本机签名与工程配置（含密钥口令，绝不入库）
+keystore.properties
+*.jks
+*.keystore
+local.properties
+.env
+
+# 编辑器/系统
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 会话中间产物（开发过程留痕，不随源码发布）
+_tmp/
+session_*/
+devdump/
+kernel_src/
