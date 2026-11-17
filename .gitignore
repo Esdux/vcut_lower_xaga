@@ -31,6 +31,9 @@ local.properties
 .DS_Store
 Thumbs.db
 
+# 技术文档：不公开、不跟踪、不上传
+docs/
+
 # 会话中间产物（开发过程留痕，不随源码发布）
 _tmp/
 session_*/
