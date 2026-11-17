@@ -24,7 +24,6 @@ module/    KernelSU 模块：service.sh 开机写参数、customize.sh 装 App�
 kmod/      vcut_lower.c —— 内核模块源码（kprobe + 1 秒轮询工作队列 + sysfs 遥测）
 app/       控制 App 源码（Kotlin + Compose，含 SystemUI hook），基于上游改写
 tools/     构建与打包脚本
-docs/      技术文档：版本说明、排查记录、逆向分析
 ```
 
 内核模块与 App 通过 sysfs 通信：
