@@ -73,15 +73,6 @@ APK 签名：仓库不含密钥。把 `keystore.properties` 放到 `app/` 下就
 - 30 秒关机取消是「按一次取消一轮」，窗口 30 分钟。它不是永久屏蔽——永久屏蔽请用 `vcut_pc_guard=0`
 - 因使用本模块造成的设备故障、电池损耗或数据丢失，作者不承担责任
 
-## 文档
-
-- [`docs/RELEASE.md`](docs/RELEASE.md) —— 每版改了什么、为什么改、实测数据
-- [`docs/HANDOFF_20261115_shutdown30s.md`](docs/HANDOFF_20261115_shutdown30s.md) —— 30 秒关机链路的完整排查记录
-- [`docs/交接文档.md`](docs/交接文档.md) —— 早期全部技术结论
-- [`docs/vcut_apk_逆向分析.md`](docs/vcut_apk_逆向分析.md) —— 原版 APK 的反编译分析
-
----
-
 ## 致敬与出处
 
 本项目的灵感与 App 界面来自 [**zyl6932/vcut_lower**](https://github.com/zyl6932/vcut_lower)：
