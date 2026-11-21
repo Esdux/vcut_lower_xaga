@@ -713,7 +713,25 @@ static DECLARE_DELAYED_WORK(mon_work, mon_work_fn);
  * mLastShutdownDelay, and the kernel already delivered 1 once.  Sending
  * 0 first resets MIUI's latch so the following 1 is a real edge.
  */
-static int shut_state;		/* 0=idle, 1=sent 0, 2=sent 0 then 1 */
+static int shut_state;		/* 0=idle, 1=sent 0, 2=sent 0 then 1, 3=skipped */
+
+/*
+ * 倒计时一旦 fire，不许被毫伏级抖动打断。
+ *
+ * 旧逻辑：mv_now >= floor 就立刻 release(0)。3050 这条线正好压在
+ * voltage_now 的噪声上（实测 1 秒内 3044 <-> 3056 反复穿越），于是
+ * fire(1) 发出 1 秒后就被 release(0) 撤掉，框架侧倒计时起不来；
+ * 更糟的是 shut_state 已到 2，之后不再重发 1，电压真掉下去时反而静默。
+ *
+ * 现在：回升必须连续 shut_release_secs 秒都 >= floor + shut_hyst_mv 才算
+ * 真的回升。落在 [floor, floor+hyst) 的滞回带里既不算回升也不算新的跌落，
+ * state==2 时保持倒计时不动。
+ */
+static int shut_hyst_mv = 30;
+module_param(shut_hyst_mv, int, 0644);
+static int shut_release_secs = 5;
+module_param(shut_release_secs, int, 0644);
+static int shut_above_cnt;	/* 连续高于 floor+hyst 的秒数 */
 
 /* bms_psy is assigned by the sampler below; declare it here because the
  * uevent helper is defined before the sampler's globals. */
@@ -747,9 +765,15 @@ static void shut_tick(int mv_now, int floor_mv, int online, int status)
 
 	if (online || status == POWER_SUPPLY_STATUS_CHARGING) {
 		if (shut_state) {
+			/* 倒计时可能正在跑：插上充电器必须把那一轮撤掉 */
+			if (shut_state == 2) {
+				shut_ue(0);
+				pr_info("vcut_lower: shut cancel by charger at %dmV\n", mv_now);
+			}
 			shut_state = 0;
 			WRITE_ONCE(t_shut_sent, 0);
 		}
+		shut_above_cnt = 0;
 		/* 插上充电器 = 新一轮开始，"临时取消"不再延续 */
 		if (READ_ONCE(shut_skip)) {
 			WRITE_ONCE(shut_skip, 0);
@@ -761,21 +785,44 @@ static void shut_tick(int mv_now, int floor_mv, int online, int status)
 	WRITE_ONCE(t_shut_mv, mv_now);
 	WRITE_ONCE(t_shut_skip, READ_ONCE(shut_skip) ? 1 : 0);
 
-	if (mv_now >= floor_mv) {
-		/* 回到闸以上 = 本轮结束，闩锁自动解除 */
+	if (mv_now >= floor_mv + READ_ONCE(shut_hyst_mv)) {
+		/* 真的回到闸以上（带滞回）：倒计时可以撤，闩锁自动解除 */
 		if (READ_ONCE(shut_skip)) {
 			WRITE_ONCE(shut_skip, 0);
 			WRITE_ONCE(t_shut_skip, 0);
 		}
+		if (shut_state == 2) {
+			/* 倒计时在跑：连续 shut_release_secs 秒确认回升才撤 */
+			if (++shut_above_cnt >= READ_ONCE(shut_release_secs)) {
+				shut_above_cnt = 0;
+				shut_state = 0;
+				WRITE_ONCE(t_shut_sent, 0);
+				shut_ue(0);
+				pr_info("vcut_lower: shut release %dmV >= %dmV+hyst (stable)\n",
+					mv_now, floor_mv);
+			}
+			return;
+		}
 		if (shut_state) {
 			shut_state = 0;
 			WRITE_ONCE(t_shut_sent, 0);
-			shut_ue(0);
+			shut_above_cnt = 0;
 			pr_info("vcut_lower: shut release %dmV >= %dmV\n",
 				mv_now, floor_mv);
 		}
 		return;
 	}
+
+	/*
+	 * 滞回带 [floor, floor+hyst)：既不算真回升，也不算新的跌落。
+	 * state==2 时保持倒计时；state==1 时等它继续掉；state==0 不在这里 arm，
+	 * 免得好好的时候被噪声带去发 0。
+	 */
+	if (mv_now >= floor_mv) {
+		shut_above_cnt = 0;
+		return;
+	}
+	shut_above_cnt = 0;
 
 	/*
 	 * 用户按了"临时取消"：
