@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         applicationId = "com.github.zyl6932.vcutlower"
-        minSdk = 35
+        minSdk = 31
         targetSdk = 37
         versionCode = 19000
         versionName = "1.9"

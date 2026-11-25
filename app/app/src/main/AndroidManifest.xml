@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- miuix-blur 自己声明 minSdk 33（用了 RuntimeShader），但本工程对模糊能力
+         有 isRuntimeShaderSupported() 降级：Android 12 上只是没有模糊效果。
+         这里允许它，以便把安装下限放到 Android 12 (API 31)。 -->
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
 
     <!-- 关于页的 QQ 群 / Telegram 群组：先 resolveActivity 探测，包可见性要求声明（取自 HyperMusicCover） -->
     <queries>
