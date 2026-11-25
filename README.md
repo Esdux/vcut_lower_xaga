@@ -1,6 +1,6 @@
 # VCut Lower · xaga
 
-小米 xaga（MT6895，22041216UC，HyperOS / Android 15，内核 5.10）的电池解容与充电调控模块。
+小米 xaga（MT6895，22041216UC，HyperOS ，内核 5.10）的电池解容与充电调控模块。
 KernelSU 模块 + 配套控制 App，内核侧一个 kprobe 模块，App 侧一个 SystemUI hook。
 
 > 这是个人自用项目，为一块已经衰减的硅碳电池多榨出可用容量。默认配置偏保守，改参数前请把下面「风险」一节读完。
