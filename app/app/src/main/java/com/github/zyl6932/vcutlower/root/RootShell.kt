@@ -38,16 +38,32 @@ object RootShell {
 
     private fun open(): Boolean {
         process?.let { if (it.isAlive) return true }
-        return try {
-            val p = ProcessBuilder("su").redirectErrorStream(true).start()
-            process = p
-            stdin = OutputStreamWriter(p.outputStream, Charsets.UTF_8)
-            stdout = BufferedReader(InputStreamReader(p.inputStream, Charsets.UTF_8))
-            true
-        } catch (_: Exception) {
-            close()
-            false
+        // 常见 su 位置：先按 PATH 找，再按绝对路径兜底（某些 ROM 的 app PATH 不含 /system/bin）
+        for (cmd in listOf("su", "/system/bin/su", "/data/adb/ksu/bin/su")) {
+            var p: Process? = null
+            try {
+                p = ProcessBuilder(cmd).redirectErrorStream(true).start()
+                val rdr = BufferedReader(InputStreamReader(p.inputStream, Charsets.UTF_8))
+                // su 若被 KSU 拒绝，会在启动后极短时间内退出并打印原因；先探一下
+                Thread.sleep(300)
+                if (!p.isAlive) {
+                    val txt = try { rdr.readText() } catch (_: Throwable) { "" }
+                    android.util.Log.w("VcutRoot", "su exited immediately via " + cmd + ": "
+                            + txt.take(300).replace('\n', ' '))
+                    continue
+                }
+                process = p
+                stdin = OutputStreamWriter(p.outputStream, Charsets.UTF_8)
+                stdout = rdr
+                android.util.Log.i("VcutRoot", "su opened via: " + cmd)
+                return true
+            } catch (e: Exception) {
+                android.util.Log.w("VcutRoot", "su open failed via " + cmd + ": " + e.javaClass.name + " " + e.message)
+                runCatching { p?.destroy() }
+            }
         }
+        close()
+        return false
     }
 
     private fun close() {
@@ -57,39 +73,27 @@ object RootShell {
         stdout = null
     }
 
-    /** 执行一段 shell；拿不到 root 时返回 null。 */
+    /**
+     *
+     * 每次 fork 一个 `su -c`，不再维持常驻 su 会话。
+     * 常驻会话要往 su 的 stdin 写命令再读 marker，
+     * 在当前 KernelSU 上写完就卡住（su 进程活着却不回显）
+     * `su -c` 一次一命令与 runDetached 同路径，实测可用。
+     */
     suspend fun run(script: String): Result? = withContext(Dispatchers.IO) {
         lock.withLock {
-            if (!open()) {
-                granted = false
-                return@withLock null
-            }
-            val marker = "__VCUT_" + UUID.randomUUID().toString().replace("-", "") + "__"
+            var p: Process? = null
             try {
-                val w = stdin!!
-                // 用子 shell 包起来：脚本里的 exit 只结束子 shell，不会把常驻会话关掉
-                w.write("( $script\n) 2>&1; echo \"$marker \$?\"\n")
-                w.flush()
-                val sb = StringBuilder()
-                val r = stdout!!
-                while (true) {
-                    val line = r.readLine() ?: run {
-                        // su 被拒绝或会话意外结束
-                        close()
-                        granted = false
-                        return@withLock null
-                    }
-                    if (line.startsWith(marker)) {
-                        granted = true
-                        val code = line.substringAfter(' ').trim().toIntOrNull() ?: -1
-                        return@withLock Result(code, sb.toString().trimEnd())
-                    }
-                    sb.append(line).append('\n')
-                }
-                @Suppress("UNREACHABLE_CODE")
-                null
-            } catch (_: Exception) {
-                close()
+                p = ProcessBuilder("su", "-c", "( $script\n) 2>&1")
+                    .redirectErrorStream(true)
+                    .start()
+                val out = p.inputStream.bufferedReader().readText()
+                val code = p.waitFor()
+                granted = true
+                Result(code, out.trimEnd())
+            } catch (e: Exception) {
+                android.util.Log.w("VcutRoot", "su -c failed: " + e.javaClass.name + " " + e.message)
+                runCatching { p?.destroy() }
                 granted = false
                 null
             }

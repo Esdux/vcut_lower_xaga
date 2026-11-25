@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # 构建 vcutlower 控制 APK（Kotlin + Jetpack Compose + AGP）
 #
-# 用法：bash tools/build_apk.sh [--no-copy] [gradle 附加参数...]
+# 用法：bash tools/build_apk.sh [--debug|--release] [--no-copy] [gradle 附加参数...]
+#
+#   --debug    默认。assembleDebug，不跑 R8/lint，用于装机测试。
+#   --release  assembleRelease（R8 + 资源压缩）。正式发布不走本机，
+#              由 .github/workflows/android-release.yml 在 CI 上构建。
 #
 # 依赖的环境变量（都有默认值，换机器时覆盖即可）：
 #   JAVA_HOME      JDK 21
@@ -13,12 +17,15 @@
 # 放到 app/ 下即用该密钥签名；没有这个文件时自动回退 debug 密钥（能装，但升级身份不同）。
 set -euo pipefail
 
+MODE=debug
 NO_COPY=0
 GRADLE_ARGS=()
 for a in "$@"; do
   case "$a" in
-    --no-copy) NO_COPY=1 ;;
-    *) GRADLE_ARGS+=("$a") ;;
+    --no-copy)  NO_COPY=1 ;;
+    --release)  MODE=release ;;
+    --debug)    MODE=debug ;;
+    *)          GRADLE_ARGS+=("$a") ;;
   esac
 done
 
@@ -46,10 +53,15 @@ echo "- ANDROID_HOME ${ANDROID_HOME:-<未设>}"
 echo "- GRADLE_USER_HOME ${GRADLE_USER_HOME:-~/.gradle}"
 echo "- gradle      $GRADLE"
 
+echo "- MODE        $MODE"
 cd "$APP_SRC"
-"$GRADLE" :app:assembleRelease --no-daemon ${GRADLE_ARGS[@]+"${GRADLE_ARGS[@]}"}
-
-APK="$APP_SRC/app/build/outputs/apk/release/app-release.apk"
+if [ "$MODE" = "release" ]; then
+  "$GRADLE" :app:assembleRelease --no-daemon ${GRADLE_ARGS[@]+"${GRADLE_ARGS[@]}"}
+  APK="$APP_SRC/app/build/outputs/apk/release/app-release.apk"
+else
+  "$GRADLE" :app:assembleDebug --no-daemon ${GRADLE_ARGS[@]+"${GRADLE_ARGS[@]}"}
+  APK="$APP_SRC/app/build/outputs/apk/debug/app-debug.apk"
+fi
 [ -f "$APK" ] || { echo "ERROR: 构建结束但产物不存在: $APK"; exit 1; }
 echo "- 产物 $APK"
 

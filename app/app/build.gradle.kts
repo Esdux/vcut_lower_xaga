@@ -48,6 +48,11 @@ android {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             ndk { abiFilters += "arm64-v8a" }
         }
+        debug {
+            // 本机 debug 包也用正式密钥签名（没有 keystore.properties 时回退 debug 密钥）：
+            // 这样测试包可以直接覆盖已装的正式版、保留 App 数据，不必卸载重装。
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
 
     androidResources {

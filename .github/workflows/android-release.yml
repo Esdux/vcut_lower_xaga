@@ -1,0 +1,65 @@
+name: Build release APK
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platforms;android-37" "build-tools;35.0.0" "platform-tools" || true
+
+      - name: Decode signing key
+        if: ${{ secrets.SIGNING_KEY_BASE64 != '' }}
+        working-directory: .
+        run: |
+          echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 -d > app/keystore.jks
+          cat > app/keystore.properties <<EOF
+          storeFile=../keystore.jks
+          storePassword=${{ secrets.SIGNING_STORE_PASSWORD }}
+          keyAlias=${{ secrets.SIGNING_KEY_ALIAS }}
+          keyPassword=${{ secrets.SIGNING_KEY_PASSWORD }}
+          EOF
+
+      - name: Assemble release (R8)
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Collect artifact
+        working-directory: .
+        run: |
+          mkdir -p dist
+          cp app/app/build/outputs/apk/release/app-release.apk dist/vcutlower.apk
+          sha256sum dist/vcutlower.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vcutlower-release
+          path: dist/vcutlower.apk
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/vcutlower.apk
